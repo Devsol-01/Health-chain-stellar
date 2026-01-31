@@ -50,7 +50,7 @@ export default function Home() {
 
           {/* Card 3 */}
           <div className="relative w-[341px] h-[317px] rounded-xl overflow-hidden shadow-card group bg-gray-100">
-            <Image src="/health-agency.webp" alt="Gov Agencies" fill className="object-cover" sizes="(max-width: 768px) 100vw, 341px" />
+            <Image src="/health-agency.jpg" alt="Gov Agencies" fill className="object-cover" sizes="(max-width: 768px) 100vw, 341px" />
             <div className="absolute inset-0 bg-black/10"></div>
             <div className="absolute bottom-[24px] w-full flex justify-center z-10">
                 <button className="bg-brand-requestBtn text-[#fffbfb] w-[200px] h-[49px] rounded font-roboto font-semibold text-[16px]">
