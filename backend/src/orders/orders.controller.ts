@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -10,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   Request,
+  ValidationPipe,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { OrderQueryParamsDto } from './dto/order-query-params.dto';
