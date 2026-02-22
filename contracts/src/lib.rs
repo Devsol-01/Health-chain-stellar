@@ -2943,15 +2943,4 @@ mod test {
         let results = client.get_units_by_bank(&empty_bank);
         assert_eq!(results.len(), 0);
     }
-
-    #[test]
-    fn test_get_units_by_bank_empty() {
-        let env = Env::default();
-        let (_, _, client) = setup_contract_with_admin(&env);
-        let empty_bank = Address::generate(&env);
-
-        // This should return an empty Vec and NOT panic
-        let results = client.get_units_by_bank(&empty_bank);
-        assert_eq!(results.len(), 0);
-    }
 }
