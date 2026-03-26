@@ -47,3 +47,25 @@ HealthDonor Protocol leverages Stellar + Soroban smart contracts to provide:
 🔒 Privacy-preserving donor identifiers
 
 All critical actions are enforced by smart contracts, reducing fraud and manual intervention.
+
+## Getting Started
+
+### For Contributors
+
+```bash
+# Clone repository
+git clone https://github.com/Christopherdominic/Health-chain-stellar.git
+cd Health-chain-stellar
+
+# Setup pre-commit hooks and dependencies
+./scripts/setup-hooks.sh
+
+# Start local development environment
+docker-compose up -d
+
+# Start backend
+cd backend
+npm run start:dev
+```
+
+See [PRE_COMMIT_HOOKS.md](./PRE_COMMIT_HOOKS.md) for hook configuration and [DOCKER_SETUP.md](./DOCKER_SETUP.md) for detailed setup instructions.
