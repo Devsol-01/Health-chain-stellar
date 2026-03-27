@@ -52,6 +52,7 @@ export class OrdersService {
     private readonly eventStore: OrderEventStoreService,
     private readonly eventEmitter: EventEmitter2,
     private readonly inventoryService: InventoryService,
+    private readonly sorobanService: SorobanService,
     private readonly requestStatusService: RequestStatusService,
     private readonly feePolicyService: FeePolicyService,
   ) { }
