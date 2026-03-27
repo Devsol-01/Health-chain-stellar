@@ -2,8 +2,6 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-
-import { AppConfigModule } from './config/config.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,6 +16,7 @@ import { PermissionsGuard } from './auth/guards/permissions.guard';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { BloodRequestsModule } from './blood-requests/blood-requests.module';
 import { BloodUnitsModule } from './blood-units/blood-units.module';
+import { AppConfigModule } from './config/config.module';
 import { DispatchModule } from './dispatch/dispatch.module';
 import { LocationHistoryModule } from './location-history/location-history.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
@@ -28,6 +27,7 @@ import { OrdersModule } from './orders/orders.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { REDIS_CLIENT } from './redis/redis.constants';
 import { RedisModule } from './redis/redis.module';
+import { RetentionModule } from './retention/retention.module';
 import { RidersModule } from './riders/riders.module';
 import { throttleGetTracker } from './throttler/throttle-tracker.util';
 import { ActivityLoggingInterceptor } from './user-activity/interceptors/activity-logging.interceptor';
@@ -113,6 +113,7 @@ import type Redis from 'ioredis';
     BloodRequestsModule,
     UserActivityModule,
     EventsModule,
+    RetentionModule,
   ],
   controllers: [AppController],
   providers: [
