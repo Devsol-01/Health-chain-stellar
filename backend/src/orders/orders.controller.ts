@@ -20,6 +20,8 @@ import { PaginatedResponse } from '../common/pagination';
 
 import { OrderQueryParamsDto } from './dto/order-query-params.dto';
 import { OrdersResponseDto } from './dto/orders-response.dto';
+import { RaiseDisputeDto } from './dto/raise-dispute.dto';
+import { ResolveDisputeDto } from './dto/resolve-dispute.dto';
 import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 import { OrdersService } from './orders.service';
 import { Order } from './types/order.types';
@@ -112,7 +114,12 @@ export class OrdersController {
   ) {
     const actorId: string | undefined = req.user?.id;
     const actorRole: string | undefined = req.user?.role;
-    return this.ordersService.updateStatus(id, statusUpdateDto, actorId, actorRole);
+    return this.ordersService.updateStatus(
+      id,
+      statusUpdateDto,
+      actorId,
+      actorRole,
+    );
   }
 
   @RequirePermissions(Permission.MANAGE_RIDERS)
@@ -132,5 +139,27 @@ export class OrdersController {
   remove(@Param('id') id: string, @Request() req: any) {
     const actorId: string | undefined = req.user?.id;
     return this.ordersService.remove(id, actorId);
+  }
+
+  @RequirePermissions(Permission.UPDATE_ORDER)
+  @Patch(':id/raise-dispute')
+  @HttpCode(HttpStatus.OK)
+  raiseDispute(
+    @Param('id') id: string,
+    @Body() dto: RaiseDisputeDto,
+    @Request() req: any,
+  ) {
+    return this.ordersService.raiseDispute(id, dto, req.user?.id);
+  }
+
+  @RequirePermissions(Permission.UPDATE_ORDER)
+  @Patch(':id/resolve-dispute')
+  @HttpCode(HttpStatus.OK)
+  resolveDispute(
+    @Param('id') id: string,
+    @Body() dto: ResolveDisputeDto,
+    @Request() req: any,
+  ) {
+    return this.ordersService.resolveDispute(id, dto, req.user?.id);
   }
 }

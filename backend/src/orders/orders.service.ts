@@ -25,6 +25,11 @@ import { PaginatedResponse, PaginationUtil } from '../common/pagination';
 
 import { OrderQueryParamsDto } from './dto/order-query-params.dto';
 import { OrdersResponseDto } from './dto/orders-response.dto';
+import { RaiseDisputeDto } from './dto/raise-dispute.dto';
+import {
+  ResolveDisputeDto,
+  DisputeResolution,
+} from './dto/resolve-dispute.dto';
 import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 import { OrderEntity } from './entities/order.entity';
 import { OrderEventEntity } from './entities/order-event.entity';
@@ -32,6 +37,7 @@ import { OrderEventType } from './enums/order-event-type.enum';
 import { OrderStatus } from './enums/order-status.enum';
 import { RequestStatusAction } from './enums/request-status-action.enum';
 import { OrderStateMachine } from './state-machine/order-state-machine';
+import { DisputePolicyService } from './services/dispute-policy.service';
 import { OrderEventStoreService } from './services/order-event-store.service';
 import { RequestStatusService } from './services/request-status.service';
 import { Order, BloodType } from './types/order.types';
@@ -49,6 +55,7 @@ export class OrdersService {
     private readonly eventEmitter: EventEmitter2,
     private readonly inventoryService: InventoryService,
     private readonly requestStatusService: RequestStatusService,
+    private readonly disputePolicy: DisputePolicyService,
   ) {}
 
   // ─── Queries ─────────────────────────────────────────────────────────────
@@ -80,21 +87,21 @@ export class OrdersService {
 
     // Start with all orders for the hospital
     let filteredOrders = this.orders.filter(
-      (order) => order.hospital.id === hospitalId
+      (order) => order.hospital.id === hospitalId,
     );
 
     // Apply date range filter
     if (startDate) {
       const start = new Date(startDate);
       filteredOrders = filteredOrders.filter(
-        (order) => new Date(order.placedAt) >= start
+        (order) => new Date(order.placedAt) >= start,
       );
     }
 
     if (endDate) {
       const end = new Date(endDate);
       filteredOrders = filteredOrders.filter(
-        (order) => new Date(order.placedAt) <= end
+        (order) => new Date(order.placedAt) <= end,
       );
     }
 
@@ -102,7 +109,7 @@ export class OrdersService {
     if (bloodTypes) {
       const bloodTypeArray = bloodTypes.split(',') as BloodType[];
       filteredOrders = filteredOrders.filter((order) =>
-        bloodTypeArray.includes(order.bloodType)
+        bloodTypeArray.includes(order.bloodType),
       );
     }
 
@@ -110,7 +117,7 @@ export class OrdersService {
     if (statuses) {
       const statusArray = statuses.split(',') as OrderStatus[];
       filteredOrders = filteredOrders.filter((order) =>
-        statusArray.includes(order.status)
+        statusArray.includes(order.status),
       );
     }
 
@@ -118,7 +125,7 @@ export class OrdersService {
     if (bloodBank) {
       const searchTerm = bloodBank.toLowerCase();
       filteredOrders = filteredOrders.filter((order) =>
-        order.bloodBank.name.toLowerCase().includes(searchTerm)
+        order.bloodBank.name.toLowerCase().includes(searchTerm),
       );
     }
 
@@ -205,7 +212,9 @@ export class OrdersService {
 
   async create(createOrderDto: any, actorId?: string) {
     if (!createOrderDto.bloodBankId) {
-      throw new BadRequestException('bloodBankId is required to place an order.');
+      throw new BadRequestException(
+        'bloodBankId is required to place an order.',
+      );
     }
 
     try {
@@ -255,7 +264,10 @@ export class OrdersService {
 
   async update(id: string, updateOrderDto: any) {
     const order = await this.findOrderOrFail(id);
-    if (updateOrderDto.version !== undefined && updateOrderDto.version !== order.version) {
+    if (
+      updateOrderDto.version !== undefined &&
+      updateOrderDto.version !== order.version
+    ) {
       throw new ConflictException(
         `Order '${id}' was modified by another request. Fetch the latest version and retry.`,
       );
@@ -292,7 +304,12 @@ export class OrdersService {
         : statusUpdate;
 
     const order = await this.findOrderOrFail(id);
-    await this.requestStatusService.applyStatusUpdate(order, dto, actorId, actorRole);
+    await this.requestStatusService.applyStatusUpdate(
+      order,
+      dto,
+      actorId,
+      actorRole,
+    );
     try {
       const updated = await this.orderRepo.save(order);
       return { message: 'Order status updated successfully', data: updated };
@@ -341,7 +358,82 @@ export class OrdersService {
       new OrderRiderAssignedEvent(orderId, riderId),
     );
 
-    return { message: 'Rider assigned successfully', data: { orderId, riderId } };
+    return {
+      message: 'Rider assigned successfully',
+      data: { orderId, riderId },
+    };
+  }
+
+  /**
+   * Raise a dispute on an order.
+   * DisputePolicy enforces: no duplicate open disputes, and post-resolution
+   * constraints (re-dispute only allowed after re-delivery).
+   */
+  async raiseDispute(id: string, dto: RaiseDisputeDto, actorId?: string) {
+    const order = await this.findOrderOrFail(id);
+    this.disputePolicy.assertCanRaiseDispute(order);
+
+    this.stateMachine.transition(order.status, OrderStatus.DISPUTED);
+
+    order.status = OrderStatus.DISPUTED;
+    order.disputeReason = dto.reason;
+    order.disputeId = dto.disputeId ?? `dispute-${Date.now()}`;
+
+    await this.orderRepo.save(order);
+
+    await this.eventStore.persistEvent({
+      orderId: order.id,
+      eventType: OrderEventType.ORDER_DISPUTED,
+      payload: { reason: dto.reason, disputeId: order.disputeId },
+      actorId,
+    });
+
+    this.eventEmitter.emit(
+      'order.disputed',
+      new OrderDisputedEvent(order.id, order.disputeId, dto.reason),
+    );
+
+    this.logger.log(`Dispute raised on order ${order.id}: ${order.disputeId}`);
+    return { message: 'Dispute raised successfully', data: order };
+  }
+
+  /**
+   * Resolve a disputed order.
+   * REFUND → CANCELLED, DELIVERED → DELIVERED.
+   */
+  async resolveDispute(id: string, dto: ResolveDisputeDto, actorId?: string) {
+    const order = await this.findOrderOrFail(id);
+    this.disputePolicy.assertCanResolveDispute(order);
+
+    // Transition through RESOLVED first (state machine requires it)
+    this.stateMachine.transition(order.status, OrderStatus.RESOLVED);
+    order.status = OrderStatus.RESOLVED;
+
+    await this.eventStore.persistEvent({
+      orderId: order.id,
+      eventType: OrderEventType.ORDER_RESOLVED,
+      payload: { resolution: dto.resolution, disputeId: order.disputeId },
+      actorId,
+    });
+
+    // Apply resolution outcome
+    const finalStatus =
+      dto.resolution === DisputeResolution.REFUND
+        ? OrderStatus.CANCELLED
+        : OrderStatus.DELIVERED;
+
+    this.stateMachine.transition(order.status, finalStatus);
+    order.status = finalStatus;
+
+    await this.orderRepo.save(order);
+
+    this.eventEmitter.emit(
+      'order.resolved',
+      new OrderResolvedEvent(order.id, dto.resolution),
+    );
+
+    this.logger.log(`Dispute resolved on order ${order.id}: ${dto.resolution}`);
+    return { message: 'Dispute resolved successfully', data: order };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

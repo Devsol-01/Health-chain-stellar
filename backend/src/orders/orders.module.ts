@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { OrderStateMachine } from './state-machine/order-state-machine';
+import { DisputePolicyService } from './services/dispute-policy.service';
 import { OrderEventStoreService } from './services/order-event-store.service';
 import { RequestStatusService } from './services/request-status.service';
 import { OrdersGateway } from './gateways/orders.gateway';
@@ -25,6 +26,7 @@ import { BlockchainEvent } from '../soroban/entities/blockchain-event.entity';
   providers: [
     OrdersService,
     OrderStateMachine,
+    DisputePolicyService,
     OrderEventStoreService,
     RequestStatusService,
     OrdersGateway,
