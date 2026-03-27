@@ -23,6 +23,7 @@ import {
   UnlockAccountDto,
 } from './dto/auth.dto';
 import { Permission } from './enums/permission.enum';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
 
 /** Stricter than global default (100/min) to reduce brute-force and abuse on auth. */
 @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -32,6 +33,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @RateLimit({ limit: 5, ttl: 3600 }) // 5 registrations per hour
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -39,6 +41,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ limit: 10, ttl: 900 }) // 10 login attempts per 15 minutes
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -75,6 +78,7 @@ export class AuthController {
 
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ limit: 3, ttl: 3600 }) // 3 password changes per hour
   async changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(
       req.user.id,
