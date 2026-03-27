@@ -36,6 +36,7 @@ import { UsersModule } from './users/users.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CorrelationIdService } from './common/middleware/correlation-id.service';
 import { DatabaseSyncGuard } from './config/database-sync.guard';
+import { TrackingModule } from './tracking/tracking.module';
 
 import type Redis from 'ioredis';
 
@@ -114,6 +115,7 @@ import type Redis from 'ioredis';
     UserActivityModule,
     EventsModule,
     RetentionModule,
+    TrackingModule,
   ],
   controllers: [AppController],
   providers: [
