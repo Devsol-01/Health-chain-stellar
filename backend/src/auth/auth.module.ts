@@ -18,6 +18,7 @@ import { RolePermissionEntity } from './entities/role-permission.entity';
 import { RoleEntity } from './entities/role.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { JwtKeyService } from './jwt-key.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
 import { PermissionsService } from './permissions.service';
