@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, Env, Vec};
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,8 @@ pub enum Error {
     InvalidAmount = 501,
     SamePayerPayee = 502,
     InvalidPage = 503,
+    /// Hospital does not have sufficient token balance to fund the escrow.
+    InsufficientEscrowFunds = 504,
 }
 
 // ── Storage keys ───────────────────────────────────────────────────────────────
@@ -128,6 +130,67 @@ impl PaymentContract {
 
         env.events().publish(
             (symbol_short!("payment"), symbol_short!("created")),
+            counter,
+        );
+
+        Ok(counter)
+    }
+
+    /// Create an escrow payment: verify the hospital has sufficient balance,
+    /// then transfer funds from the hospital to this contract and record the
+    /// payment as `Locked`.
+    ///
+    /// Returns `Error::InsufficientEscrowFunds { required, available }` if the
+    /// hospital's token balance is below `amount`, so the NestJS backend can
+    /// surface a meaningful error message instead of an opaque host panic.
+    ///
+    /// No storage entry is written if the balance check fails.
+    pub fn create_escrow(
+        env: Env,
+        request_id: u64,
+        hospital: Address,
+        payee: Address,
+        amount: i128,
+        token: Address,
+    ) -> Result<u64, Error> {
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        if hospital == payee {
+            return Err(Error::SamePayerPayee);
+        }
+
+        hospital.require_auth();
+
+        // Balance check BEFORE any state is written.
+        let token_client = token::Client::new(&env, &token);
+        let available = token_client.balance(&hospital);
+        if available < amount {
+            return Err(Error::InsufficientEscrowFunds);
+        }
+
+        // Transfer funds into escrow (this contract).
+        token_client.transfer(&hospital, &env.current_contract_address(), &amount);
+
+        let counter = get_counter(&env) + 1;
+        set_counter(&env, counter);
+
+        let now = env.ledger().timestamp();
+        let payment = Payment {
+            id: counter,
+            request_id,
+            payer: hospital,
+            payee,
+            amount,
+            status: PaymentStatus::Locked,
+            created_at: now,
+            updated_at: now,
+        };
+
+        store_payment(&env, &payment);
+
+        env.events().publish(
+            (symbol_short!("payment"), symbol_short!("escrowed")),
             counter,
         );
 
