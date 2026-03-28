@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 import {
   Injectable,
@@ -166,7 +166,9 @@ export class AuthService {
         ),
       });
 
-      const tokenKey = `auth:refresh-consumed:${refreshToken}`;
+      // Hash the raw token so the raw value is never stored as a Redis key.
+      const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
+      const tokenKey = `auth:refresh-consumed:${tokenHash}`;
       const expiresAt = payload.exp
         ? payload.exp - Math.floor(Date.now() / 1000)
         : this.getRefreshTokenExpirySeconds();
