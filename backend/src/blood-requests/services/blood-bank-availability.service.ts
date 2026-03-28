@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { MapsService } from '../../maps/maps.service';
-import { InventoryStockEntity } from '../../inventory/entities/inventory-stock.entity';
-import { OrganizationEntity } from '../../organizations/entities/organization.entity';
 import { BloodComponent } from '../../blood-units/enums/blood-component.enum';
 import { BloodType } from '../../blood-units/enums/blood-type.enum';
+import { InventoryStockEntity } from '../../inventory/entities/inventory-stock.entity';
+import { MapsService } from '../../maps/maps.service';
+import { OrganizationEntity } from '../../organizations/entities/organization.entity';
 import {
   BloodBankAvailabilityDto,
   GetAvailabilityResponseDto,

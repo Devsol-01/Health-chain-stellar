@@ -2,9 +2,9 @@ import { Injectable, ConflictException, NotFoundException, BadRequestException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { BloodRequestReservationEntity, ReservationStatus } from '../blood-requests/entities/blood-request-reservation.entity';
-import { BloodRequestEntity } from '../blood-requests/entities/blood-request.entity';
-import { InsufficientInventoryException } from '../common/exceptions/domain.exception';
+import { BloodRequestReservationEntity, ReservationStatus } from '../entities/blood-request-reservation.entity';
+import { BloodRequestEntity } from '../entities/blood-request.entity';
+import { InsufficientInventoryException } from '../../common/exceptions/domain.exception';
 
 @Injectable()
 export class BloodRequestReservationService {

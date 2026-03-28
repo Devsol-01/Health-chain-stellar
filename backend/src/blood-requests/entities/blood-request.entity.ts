@@ -8,6 +8,8 @@ import {
   Index,
 } from 'typeorm';
 
+import { BloodComponent } from '../../blood-units/enums/blood-component.enum';
+import { BloodType } from '../../blood-units/enums/blood-type.enum';
 import { BloodRequestStatus } from '../enums/blood-request-status.enum';
 
 import { BloodRequestItemEntity } from './blood-request-item.entity';
@@ -179,17 +181,17 @@ export class BloodRequestEntity {
   /**
    * Get the urgency level based on time remaining
    */
-  getUrgencyLevel(currentTimestamp: number): Urgency {
+  getUrgencyLevel(currentTimestamp: number): RequestUrgency {
     const timeRemainingHours = this.timeRemaining(currentTimestamp) / 3600;
 
     if (timeRemainingHours < 2) {
-      return Urgency.CRITICAL;
+      return RequestUrgency.CRITICAL;
     } else if (timeRemainingHours < 6) {
-      return Urgency.URGENT;
+      return RequestUrgency.URGENT;
     } else if (timeRemainingHours < 24) {
-      return Urgency.ROUTINE;
+      return RequestUrgency.ROUTINE;
     } else {
-      return Urgency.SCHEDULED;
+      return RequestUrgency.SCHEDULED;
     }
   }
 
@@ -199,9 +201,8 @@ export class BloodRequestEntity {
   validate(): BloodRequestValidationResult {
     const errors: string[] = [];
 
-    // Validate quantity
-    if (this.quantityMl <= 0) {
-      errors.push('Quantity must be greater than 0');
+    if (!this.items || this.items.length === 0) {
+      errors.push('Request must have at least one item');
     }
 
     // Validate required by timestamp
@@ -209,18 +210,8 @@ export class BloodRequestEntity {
       errors.push('Required by timestamp must be after creation timestamp');
     }
 
-    // Validate blood type
-    if (!Object.values(BloodType).includes(this.bloodType)) {
-      errors.push('Invalid blood type');
-    }
-
-    // Validate component
-    if (!Object.values(BloodComponent).includes(this.component)) {
-      errors.push('Invalid blood component');
-    }
-
     // Validate urgency
-    if (!Object.values(Urgency).includes(this.urgency)) {
+    if (!Object.values(RequestUrgency).includes(this.urgency)) {
       errors.push('Invalid urgency level');
     }
 
@@ -229,82 +220,21 @@ export class BloodRequestEntity {
       errors.push('Invalid request status');
     }
 
-    // Validate fulfilled quantity
-    if (this.fulfilledQuantityMl < 0) {
-      errors.push('Fulfilled quantity cannot be negative');
-    }
-
-    if (this.fulfilledQuantityMl > this.quantityMl) {
-      errors.push('Fulfilled quantity cannot exceed requested quantity');
+    // Validate items if present
+    for (let i = 0; i < (this.items?.length || 0); i++) {
+      const item = this.items![i];
+      if (!item.quantityMl || item.quantityMl <= 0) {
+        errors.push(`Item ${i + 1}: Quantity must be greater than 0`);
+      }
+      if (item.fulfilledQuantityMl > item.quantityMl) {
+        errors.push(`Item ${i + 1}: Fulfilled quantity cannot exceed requested quantity`);
+      }
     }
 
     return {
       isValid: errors.length === 0,
       errors,
     };
-  }
-
-  /**
-   * Get fulfillment progress
-   */
-  getFulfillmentProgress(): FulfillmentProgress {
-    const remainingMl = Math.max(0, this.quantityMl - this.fulfilledQuantityMl);
-    const percentage =
-      this.quantityMl > 0
-        ? Math.min(100, (this.fulfilledQuantityMl / this.quantityMl) * 100)
-        : 0;
-
-    return {
-      requestedMl: this.quantityMl,
-      fulfilledMl: this.fulfilledQuantityMl,
-      remainingMl,
-      percentage,
-    };
-  }
-
-  /**
-   * Add fulfilled quantity
-   */
-  addFulfilledQuantity(quantityMl: number): void {
-    this.fulfilledQuantityMl = Math.min(
-      this.quantityMl,
-      this.fulfilledQuantityMl + quantityMl,
-    );
-  }
-
-  /**
-   * Assign a blood unit to this request
-   */
-  assignUnit(unitId: string): void {
-    if (!this.assignedUnits) {
-      this.assignedUnits = [];
-    }
-    if (!this.assignedUnits.includes(unitId)) {
-      this.assignedUnits.push(unitId);
-    }
-  }
-
-  /**
-   * Remove a blood unit from this request
-   */
-  removeUnit(unitId: string): void {
-    if (this.assignedUnits) {
-      this.assignedUnits = this.assignedUnits.filter((id) => id !== unitId);
-    }
-  }
-
-  /**
-   * Check if a unit is assigned to this request
-   */
-  isUnitAssigned(unitId: string): boolean {
-    return this.assignedUnits?.includes(unitId) ?? false;
-  }
-
-  /**
-   * Get the number of assigned units
-   */
-  getAssignedUnitsCount(): number {
-    return this.assignedUnits?.length ?? 0;
   }
 
   /**
@@ -319,7 +249,6 @@ export class BloodRequestEntity {
    */
   markAsFulfilled(): void {
     this.status = BloodRequestStatus.FULFILLED;
-    this.fulfilledQuantityMl = this.quantityMl;
   }
 
   /**
@@ -330,61 +259,9 @@ export class BloodRequestEntity {
   }
 
   /**
-   * Get a summary of the request
-   */
-  getSummary(currentTimestamp: number): Record<string, unknown> {
-    const progress = this.getFulfillmentProgress();
-    const timeRemaining = this.timeRemaining(currentTimestamp);
-
-    return {
-      id: this.id,
-      requestNumber: this.requestNumber,
-      hospitalId: this.hospitalId,
-      bloodType: this.bloodType,
-      component: this.component,
-      quantityMl: this.quantityMl,
-      urgency: this.urgency,
-      status: this.status,
-      requiredByTimestamp: this.requiredByTimestamp,
-      timeRemainingSeconds: timeRemaining,
-      isOverdue: this.isOverdue(currentTimestamp),
-      isFulfilled: this.isFulfilled(),
-      fulfillmentProgress: progress,
-      assignedUnitsCount: this.getAssignedUnitsCount(),
-      createdAt: this.createdAt.toISOString(),
-    };
-  }
-
-  /**
    * Check equality with another blood request
    */
   equals(other: BloodRequestEntity): boolean {
     return this.id === other.id;
-  }
-
-  /**
-   * Create a plain object representation
-   */
-  toJSON(): Record<string, unknown> {
-    return {
-      id: this.id,
-      requestNumber: this.requestNumber,
-      hospitalId: this.hospitalId,
-      bloodType: this.bloodType,
-      component: this.component,
-      quantityMl: this.quantityMl,
-      urgency: this.urgency,
-      createdTimestamp: this.createdTimestamp,
-      requiredByTimestamp: this.requiredByTimestamp,
-      status: this.status,
-      assignedUnits: this.assignedUnits,
-      fulfilledQuantityMl: this.fulfilledQuantityMl,
-      deliveryAddress: this.deliveryAddress,
-      notes: this.notes,
-      blockchainTxHash: this.blockchainTxHash,
-      createdByUserId: this.createdByUserId,
-      createdAt: this.createdAt.toISOString(),
-      updatedAt: this.updatedAt.toISOString(),
-    };
   }
 }
