@@ -97,8 +97,30 @@ pub enum BloodStatus {
     Reserved,
     InTransit,
     Delivered,
+    Quarantined,
     Expired,
     Discarded,
+}
+
+/// Quarantine reason categories for explicit on-chain lifecycle records.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum QuarantineReason {
+    ScreeningFailure,
+    TemperatureBreach,
+    ContaminationSuspected,
+    DonorEvent,
+    ManualOperatorAction,
+    AnomalyDetection,
+    Other,
+}
+
+/// Final quarantine disposition outcomes.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum QuarantineDisposition {
+    Release,
+    Discard,
 }
 
 /// Withdrawal reason enumeration
@@ -164,6 +186,20 @@ pub struct StatusChangeEvent {
     pub old_status: BloodStatus,
     pub new_status: BloodStatus,
     pub actor: Address,
+    pub timestamp: u64,
+}
+
+/// Dedicated quarantine lifecycle event for rich auditability.
+#[contracttype]
+#[derive(Clone)]
+pub struct QuarantineLifecycleEvent {
+    pub blood_unit_id: u64,
+    pub old_status: BloodStatus,
+    pub new_status: BloodStatus,
+    pub actor: Address,
+    pub reason: QuarantineReason,
+    /// 0 = not finalized, 1 = release, 2 = discard
+    pub disposition_code: u32,
     pub timestamp: u64,
 }
 
@@ -1198,6 +1234,125 @@ impl HealthChainContract {
         Ok(())
     }
 
+    /// Place a blood unit into explicit quarantine state.
+    pub fn quarantine_blood(
+        env: Env,
+        caller: Address,
+        unit_id: u64,
+        reason: QuarantineReason,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let is_bank = Self::is_blood_bank(env.clone(), caller.clone());
+        let is_hosp = Self::is_hospital(env.clone(), caller.clone());
+        if !is_bank && !is_hosp {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut units: Map<u64, BloodUnit> = env
+            .storage()
+            .persistent()
+            .get(&BLOOD_UNITS)
+            .unwrap_or(Map::new(&env));
+
+        let mut unit = units.get(unit_id).ok_or(Error::UnitNotFound)?;
+        let old_status = unit.status;
+
+        if old_status == BloodStatus::Quarantined {
+            return Err(Error::InvalidStatus);
+        }
+
+        let current_time = env.ledger().timestamp();
+        if unit.expiration_date <= current_time {
+            return Err(Error::UnitExpired);
+        }
+
+        unit.status = BloodStatus::Quarantined;
+        units.set(unit_id, unit.clone());
+        env.storage().persistent().set(&BLOOD_UNITS, &units);
+
+        record_status_change(
+            &env,
+            unit_id,
+            old_status,
+            BloodStatus::Quarantined,
+            caller.clone(),
+        );
+
+        let quarantine_event = QuarantineLifecycleEvent {
+            blood_unit_id: unit_id,
+            old_status,
+            new_status: BloodStatus::Quarantined,
+            actor: caller,
+            reason,
+            disposition_code: 0,
+            timestamp: current_time,
+        };
+
+        env.events()
+            .publish((symbol_short!("quar"), symbol_short!("place")), quarantine_event);
+
+        Ok(())
+    }
+
+    /// Finalize quarantine with explicit release (Available) or discard outcome.
+    pub fn finalize_quarantine(
+        env: Env,
+        caller: Address,
+        unit_id: u64,
+        reason: QuarantineReason,
+        disposition: QuarantineDisposition,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let is_bank = Self::is_blood_bank(env.clone(), caller.clone());
+        let is_hosp = Self::is_hospital(env.clone(), caller.clone());
+        if !is_bank && !is_hosp {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut units: Map<u64, BloodUnit> = env
+            .storage()
+            .persistent()
+            .get(&BLOOD_UNITS)
+            .unwrap_or(Map::new(&env));
+
+        let mut unit = units.get(unit_id).ok_or(Error::UnitNotFound)?;
+        let old_status = unit.status;
+        if old_status != BloodStatus::Quarantined {
+            return Err(Error::InvalidStatus);
+        }
+
+        let new_status = match disposition {
+            QuarantineDisposition::Release => BloodStatus::Available,
+            QuarantineDisposition::Discard => BloodStatus::Discarded,
+        };
+
+        unit.status = new_status;
+        units.set(unit_id, unit.clone());
+        env.storage().persistent().set(&BLOOD_UNITS, &units);
+
+        record_status_change(&env, unit_id, old_status, new_status, caller.clone());
+
+        let quarantine_event = QuarantineLifecycleEvent {
+            blood_unit_id: unit_id,
+            old_status,
+            new_status,
+            actor: caller,
+            reason,
+            disposition_code: match disposition {
+                QuarantineDisposition::Release => 1,
+                QuarantineDisposition::Discard => 2,
+            },
+            timestamp: env.ledger().timestamp(),
+        };
+
+        env.events()
+            .publish((symbol_short!("quar"), symbol_short!("final")), quarantine_event);
+
+        Ok(())
+    }
+
     // ── READ ──────────────────────────────────────────────────────────────────
 
     /// Get blood unit by ID.
@@ -1726,6 +1881,13 @@ impl HealthChainContract {
             payee,
             amount,
             asset,
+            fee_structure: FeeStructure {
+                policy_id: Symbol::new(&env, "default_fee_policy"),
+                service_fee: 0,
+                network_fee: 0,
+                performance_bonus: 0,
+                fixed_fee: 0,
+            },
             status: PaymentStatus::Pending,
             escrow_released_at: None,
         };
@@ -3119,6 +3281,7 @@ mod test {
             let result = client.register_blood(
                 &bank,
                 &blood_type,
+                &BloodComponent::WholeBlood,
                 &450,
                 &expiration,
                 &Some(symbol_short!("donor")),
@@ -4729,7 +4892,14 @@ mod test {
         let current_time = env.ledger().timestamp();
         let expiration = current_time + (7 * 86400);
         let unit_id =
-            client.register_blood(&bank, &BloodType::OPositive, &450, &expiration, &None);
+            client.register_blood(
+                &bank,
+                &BloodType::OPositive,
+                &BloodComponent::WholeBlood,
+                &450,
+                &expiration,
+                &None,
+            );
         client.allocate_blood(&bank, &unit_id, &hospital);
 
         // Current custodian (bank) can initiate transfer
@@ -4753,7 +4923,14 @@ mod test {
         let expiration = current_time + (7 * 86400);
         // bank_a registers and allocates the unit — bank_a is the custodian
         let unit_id =
-            client.register_blood(&bank_a, &BloodType::OPositive, &450, &expiration, &None);
+            client.register_blood(
+                &bank_a,
+                &BloodType::OPositive,
+                &BloodComponent::WholeBlood,
+                &450,
+                &expiration,
+                &None,
+            );
         client.allocate_blood(&bank_a, &unit_id, &hospital);
 
         // bank_b is authorized but is NOT the custodian — must fail
@@ -4774,7 +4951,14 @@ mod test {
         let current_time = env.ledger().timestamp();
         let expiration = current_time + (7 * 86400);
         let unit_id =
-            client.register_blood(&bank, &BloodType::OPositive, &450, &expiration, &None);
+            client.register_blood(
+                &bank,
+                &BloodType::OPositive,
+                &BloodComponent::WholeBlood,
+                &450,
+                &expiration,
+                &None,
+            );
         client.allocate_blood(&bank, &unit_id, &hospital);
 
         // Completely unregistered address — must fail with Unauthorized, not NotCurrentCustodian
@@ -4799,6 +4983,7 @@ mod test {
         let unit_id = client.register_blood(
             bank,
             &BloodType::OPositive,
+            &BloodComponent::WholeBlood,
             &450,
             &expiration,
             &Some(symbol_short!("donor")),
