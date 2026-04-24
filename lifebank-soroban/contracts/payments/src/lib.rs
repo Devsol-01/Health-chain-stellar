@@ -1,9 +1,9 @@
 #![no_std]
+use soroban_sdk::token;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, Env, String,
     Vec,
 };
-use soroban_sdk::token;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -135,7 +135,10 @@ fn pledge_key(id: u64) -> (u64, &'static str) {
 }
 
 fn get_counter(env: &Env) -> u64 {
-    env.storage().instance().get(&PAYMENT_COUNTER).unwrap_or(0u64)
+    env.storage()
+        .instance()
+        .get(&PAYMENT_COUNTER)
+        .unwrap_or(0u64)
 }
 
 fn set_counter(env: &Env, val: u64) {
@@ -143,7 +146,10 @@ fn set_counter(env: &Env, val: u64) {
 }
 
 fn get_pledge_counter(env: &Env) -> u64 {
-    env.storage().instance().get(&PLEDGE_COUNTER).unwrap_or(0u64)
+    env.storage()
+        .instance()
+        .get(&PLEDGE_COUNTER)
+        .unwrap_or(0u64)
 }
 
 fn set_pledge_counter(env: &Env, val: u64) {
@@ -214,7 +220,11 @@ impl PaymentContract {
         store_payment(&env, &payment);
 
         env.events().publish(
-            (symbol_short!("payment"), symbol_short!("created")),
+            (
+                symbol_short!("payment"),
+                symbol_short!("created"),
+                symbol_short!("v1"),
+            ),
             counter,
         );
 
@@ -278,7 +288,11 @@ impl PaymentContract {
         store_payment(&env, &payment);
 
         env.events().publish(
-            (symbol_short!("payment"), symbol_short!("escrowed")),
+            (
+                symbol_short!("payment"),
+                symbol_short!("escrowed"),
+                symbol_short!("v1"),
+            ),
             counter,
         );
 
@@ -310,7 +324,11 @@ impl PaymentContract {
         store_payment(&env, &payment);
 
         env.events().publish(
-            (symbol_short!("payment"), symbol_short!("disputed")),
+            (
+                symbol_short!("payment"),
+                symbol_short!("disputed"),
+                symbol_short!("v1"),
+            ),
             (payment_id, case_id),
         );
 
@@ -327,7 +345,11 @@ impl PaymentContract {
         store_payment(&env, &payment);
 
         env.events().publish(
-            (symbol_short!("payment"), symbol_short!("resolved")),
+            (
+                symbol_short!("payment"),
+                symbol_short!("resolved"),
+                symbol_short!("v1"),
+            ),
             payment_id,
         );
 
@@ -527,7 +549,11 @@ impl PaymentContract {
         store_pledge(&env, &pledge);
 
         env.events().publish(
-            (symbol_short!("pledge"), symbol_short!("create")),
+            (
+                symbol_short!("pledge"),
+                symbol_short!("create"),
+                symbol_short!("v1"),
+            ),
             id,
         );
 
@@ -538,7 +564,12 @@ impl PaymentContract {
         load_pledge(&env, pledge_id).ok_or(Error::PaymentNotFound)
     }
 
-    pub fn set_pledge_active(env: Env, pledge_id: u64, donor: Address, active: bool) -> Result<(), Error> {
+    pub fn set_pledge_active(
+        env: Env,
+        pledge_id: u64,
+        donor: Address,
+        active: bool,
+    ) -> Result<(), Error> {
         donor.require_auth();
         let mut p = load_pledge(&env, pledge_id).ok_or(Error::PaymentNotFound)?;
         if p.donor != donor {

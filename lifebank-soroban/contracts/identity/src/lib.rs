@@ -174,7 +174,8 @@ impl IdentityContract {
         env.storage().instance().set(&DataKey::OrgCounter, &0u32);
         Self::grant_role(env.clone(), admin.clone(), Role::Admin);
 
-        env.events().publish((symbol_short!("init"),), admin);
+        env.events()
+            .publish((symbol_short!("init"), symbol_short!("v1")), admin);
 
         Ok(())
     }
@@ -265,7 +266,7 @@ impl IdentityContract {
         Self::increment_counter(&env, DataKey::OrgCounter);
 
         env.events().publish(
-            (symbol_short!("org_reg"),),
+            (symbol_short!("org_reg"), symbol_short!("v1")),
             OrganizationRegistered {
                 org_id: org_id.clone(),
                 org_type,
@@ -494,7 +495,7 @@ impl IdentityContract {
 
         // Emit event
         env.events().publish(
-            (Symbol::new(&env, "org_verified"),),
+            (Symbol::new(&env, "org_verified"), symbol_short!("v1")),
             (org_id, admin, env.ledger().timestamp()),
         );
 
@@ -531,8 +532,10 @@ impl IdentityContract {
         env.storage().persistent().set(&reason_key, &reason);
 
         // Emit event
-        env.events()
-            .publish((Symbol::new(&env, "org_unverified"),), (org_id, reason));
+        env.events().publish(
+            (Symbol::new(&env, "org_unverified"), symbol_short!("v1")),
+            (org_id, reason),
+        );
 
         Ok(())
     }
@@ -593,8 +596,10 @@ impl IdentityContract {
             .persistent()
             .set(&DataKey::RatingRecord(request_id, rater.clone()), &record);
 
-        env.events()
-            .publish((symbol_short!("rated"),), (org_id, rater, rating));
+        env.events().publish(
+            (symbol_short!("rated"), symbol_short!("v1")),
+            (org_id, rater, rating),
+        );
 
         Ok(())
     }
@@ -673,8 +678,10 @@ impl IdentityContract {
         badges.push_back(record);
         env.storage().persistent().set(&badges_key, &badges);
 
-        env.events()
-            .publish((symbol_short!("badge"),), (org_id, admin));
+        env.events().publish(
+            (symbol_short!("badge"), symbol_short!("v1")),
+            (org_id, admin),
+        );
 
         Ok(())
     }
@@ -778,7 +785,7 @@ impl IdentityContract {
             .set(&DataKey::Delivery(request_id), &proof);
 
         env.events().publish(
-            (symbol_short!("delivery"),),
+            (symbol_short!("delivery"), symbol_short!("v1")),
             (request_id, org_id, recipient, temperature_ok),
         );
 

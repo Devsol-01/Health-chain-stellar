@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { BlockchainEvent } from './entities/blockchain-event.entity';
+import { assertSupportedContractEventSchemaVersion } from './event-schema-version';
 import { BloodUnitTrail } from './entities/blood-unit-trail.entity';
 import { SorobanService } from './soroban.service';
 
@@ -110,6 +111,8 @@ export class SorobanIndexerService {
    * Process a blockchain event
    */
   private async processEvent(event: BlockchainEvent): Promise<void> {
+    const schemaVersion = assertSupportedContractEventSchemaVersion(event);
+
     switch (event.eventType) {
       case 'blood_registered':
         await this.handleBloodRegistered(event);
@@ -121,7 +124,9 @@ export class SorobanIndexerService {
         await this.handleTemperatureLogged(event);
         break;
       default:
-        this.logger.warn(`Unknown event type: ${event.eventType}`);
+        this.logger.warn(
+          `Unknown event type: ${event.eventType} (schema v${schemaVersion})`,
+        );
     }
   }
 

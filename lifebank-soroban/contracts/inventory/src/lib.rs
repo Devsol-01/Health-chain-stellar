@@ -7,7 +7,7 @@ mod types;
 mod validation;
 
 use crate::error::ContractError;
-use crate::types::{BloodStatus, BloodType, BloodUnit, DataKey, Reservation, is_valid_transition};
+use crate::types::{is_valid_transition, BloodStatus, BloodType, BloodUnit, DataKey, Reservation};
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Map, String, Vec};
 #[contract]
@@ -435,8 +435,7 @@ impl InventoryContract {
         // Update all unit statuses to Reserved
         for i in 0..unit_ids.len() {
             let unit_id = unit_ids.get(i).ok_or(ContractError::NotFound)?;
-            let mut unit =
-                storage::get_blood_unit(&env, unit_id).ok_or(ContractError::NotFound)?;
+            let mut unit = storage::get_blood_unit(&env, unit_id).ok_or(ContractError::NotFound)?;
             let old_status = unit.status;
             unit.status = BloodStatus::Reserved;
             storage::set_blood_unit(&env, &unit);
@@ -459,10 +458,7 @@ impl InventoryContract {
             .ok_or(ContractError::ReservationNotFound)?;
 
         for i in 0..reservation.unit_ids.len() {
-            let unit_id = reservation
-                .unit_ids
-                .get(i)
-                .ok_or(ContractError::NotFound)?;
+            let unit_id = reservation.unit_ids.get(i).ok_or(ContractError::NotFound)?;
             if let Some(mut unit) = storage::get_blood_unit(&env, unit_id) {
                 if unit.status == BloodStatus::Reserved {
                     unit.status = BloodStatus::Available;
