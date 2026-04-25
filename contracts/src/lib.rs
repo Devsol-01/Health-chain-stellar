@@ -18,6 +18,13 @@ mod test_protocol_invariants;
 #[cfg(test)]
 mod test_storage_layout;
 
+/// Current schema version for contract events emitted by this crate.
+///
+/// Events identify their payload schema by appending `symbol_short!("v1")` as
+/// the final topic. Backend/indexer consumers must treat events without this
+/// marker as legacy and must not silently decode future version markers.
+pub const EVENT_SCHEMA_VERSION: u32 = 1;
+
 /// Error types for blood registration and transfer
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -748,7 +755,11 @@ impl HealthChainContract {
         );
 
         env.events().publish(
-            (symbol_short!("blood"), symbol_short!("allocate")),
+            (
+                symbol_short!("blood"),
+                symbol_short!("allocate"),
+                symbol_short!("v1"),
+            ),
             (unit_id, hospital, current_time),
         );
 
@@ -824,7 +835,11 @@ impl HealthChainContract {
 
             // Emit event
             env.events().publish(
-                (symbol_short!("blood"), symbol_short!("allocate")),
+                (
+                    symbol_short!("blood"),
+                    symbol_short!("allocate"),
+                    symbol_short!("v1"),
+                ),
                 (unit_id, hospital.clone(), current_time),
             );
 
@@ -880,8 +895,14 @@ impl HealthChainContract {
         );
 
         // Emit event
-        env.events()
-            .publish((symbol_short!("blood"), symbol_short!("cancel")), unit_id);
+        env.events().publish(
+            (
+                symbol_short!("blood"),
+                symbol_short!("cancel"),
+                symbol_short!("v1"),
+            ),
+            unit_id,
+        );
 
         Ok(())
     }
@@ -973,7 +994,11 @@ impl HealthChainContract {
         );
 
         env.events().publish(
-            (symbol_short!("custody"), symbol_short!("initiate")),
+            (
+                symbol_short!("custody"),
+                symbol_short!("initiate"),
+                symbol_short!("v1"),
+            ),
             custody_event,
         );
 
@@ -1119,7 +1144,11 @@ impl HealthChainContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("custody"), symbol_short!("confirm")),
+            (
+                symbol_short!("custody"),
+                symbol_short!("confirm"),
+                symbol_short!("v1"),
+            ),
             custody_event,
         );
 
@@ -1212,7 +1241,11 @@ impl HealthChainContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("blood"), symbol_short!("tr_cancel")),
+            (
+                symbol_short!("blood"),
+                symbol_short!("tr_cancel"),
+                symbol_short!("v1"),
+            ),
             (
                 (unit_id, current_time),
                 (symbol_short!("custody"), symbol_short!("cancel")),
@@ -1269,7 +1302,11 @@ impl HealthChainContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("blood"), symbol_short!("withdraw")),
+            (
+                symbol_short!("blood"),
+                symbol_short!("withdraw"),
+                symbol_short!("v1"),
+            ),
             (unit_id, reason, current_time),
         );
 
@@ -1523,8 +1560,14 @@ pub(crate) fn record_status_change(
     env.storage().persistent().set(&history_key, &history);
 
     // Also emit event
-    env.events()
-        .publish((symbol_short!("status"), symbol_short!("change")), event);
+    env.events().publish(
+        (
+            symbol_short!("status"),
+            symbol_short!("change"),
+            symbol_short!("v1"),
+        ),
+        event,
+    );
 }
 
 pub(crate) fn record_request_status_change(
@@ -1544,8 +1587,14 @@ pub(crate) fn record_request_status_change(
         reason,
     };
 
-    env.events()
-        .publish((symbol_short!("blood"), symbol_short!("request")), event);
+    env.events().publish(
+        (
+            symbol_short!("request"),
+            symbol_short!("status"),
+            symbol_short!("v1"),
+        ),
+        event,
+    );
 }
 
 /// Append a custody event_id to the paginated trail for a unit
@@ -1891,8 +1940,14 @@ impl HealthChainContract {
             created_at: current_time,
         };
 
-        env.events()
-            .publish((symbol_short!("blood"), symbol_short!("request")), event);
+        env.events().publish(
+            (
+                symbol_short!("blood"),
+                symbol_short!("request"),
+                symbol_short!("v1"),
+            ),
+            event,
+        );
 
         Ok(request_id)
     }
@@ -2245,7 +2300,11 @@ impl HealthChainContract {
 
         // Emit DisputeRaisedEvent
         env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("raised")),
+            (
+                symbol_short!("dispute"),
+                symbol_short!("raised"),
+                symbol_short!("v1"),
+            ),
             DisputeRaisedEvent {
                 dispute_id,
                 payment_id,
@@ -2330,7 +2389,11 @@ impl HealthChainContract {
 
         // Emit DisputeResolvedEvent
         env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("resolved")),
+            (
+                symbol_short!("dispute"),
+                symbol_short!("resolved"),
+                symbol_short!("v1"),
+            ),
             DisputeResolvedEvent {
                 dispute_id,
                 payment_id: dispute.payment_id,
@@ -2527,7 +2590,11 @@ impl HealthChainContract {
             );
 
             env.events().publish(
-                (symbol_short!("blood"), symbol_short!("allocate")),
+                (
+                    symbol_short!("blood"),
+                    symbol_short!("allocate"),
+                    symbol_short!("v1"),
+                ),
                 (unit_id, request.hospital_id.clone(), current_time),
             );
         }
@@ -2556,7 +2623,11 @@ impl HealthChainContract {
         );
 
         env.events().publish(
-            (symbol_short!("request"), symbol_short!("approve")),
+            (
+                symbol_short!("request"),
+                symbol_short!("approve"),
+                symbol_short!("v1"),
+            ),
             RequestApprovedEvent {
                 request_id,
                 blood_bank: bank_id,
@@ -2733,7 +2804,11 @@ impl HealthChainContract {
         );
 
         env.events().publish(
-            (symbol_short!("request"), symbol_short!("fulfill")),
+            (
+                symbol_short!("request"),
+                symbol_short!("fulfill"),
+                symbol_short!("v1"),
+            ),
             RequestFulfilledEvent {
                 request_id,
                 blood_bank: bank_id,
@@ -3047,8 +3122,14 @@ impl HealthChainContract {
 
         env.storage().persistent().set(&org_key, &organization);
 
-        env.events()
-            .publish((symbol_short!("org"), symbol_short!("reg")), org_id);
+        env.events().publish(
+            (
+                symbol_short!("org"),
+                symbol_short!("reg"),
+                symbol_short!("v1"),
+            ),
+            org_id,
+        );
 
         Ok(())
     }
@@ -3085,7 +3166,11 @@ impl HealthChainContract {
         env.storage().persistent().set(&verifier_key, &admin);
 
         env.events().publish(
-            (symbol_short!("org"), symbol_short!("verified")),
+            (
+                symbol_short!("org"),
+                symbol_short!("verified"),
+                symbol_short!("v1"),
+            ),
             (org_id, admin, env.ledger().timestamp()),
         );
 
@@ -3125,7 +3210,11 @@ impl HealthChainContract {
         env.storage().persistent().set(&reason_key, &reason);
 
         env.events().publish(
-            (symbol_short!("org"), symbol_short!("unverif")),
+            (
+                symbol_short!("org"),
+                symbol_short!("unverif"),
+                symbol_short!("v1"),
+            ),
             (org_id, reason),
         );
 
@@ -4462,12 +4551,15 @@ mod test {
 
         let (event_contract_id, topics, data) = events.get(0).unwrap();
         assert_eq!(event_contract_id, contract_id);
-        assert_eq!(topics.len(), 2);
+        assert_eq!(topics.len(), 3);
 
         let topic0: Symbol = TryFromVal::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
         let topic1: Symbol = TryFromVal::try_from_val(&env, &topics.get(1).unwrap()).unwrap();
+        let version_topic: Symbol =
+            TryFromVal::try_from_val(&env, &topics.get(2).unwrap()).unwrap();
         assert_eq!(topic0, symbol_short!("blood"));
         assert_eq!(topic1, symbol_short!("request"));
+        assert_eq!(version_topic, symbol_short!("v1"));
 
         let event: RequestCreatedEvent = TryFromVal::try_from_val(&env, &data).unwrap();
         assert_eq!(event.request_id, request_id);
@@ -4504,8 +4596,13 @@ mod test {
         // 1. Verify the Contract ID
         assert_eq!(last_event.0, contract_id);
 
-        // 2. Verify the Topics (blood, request)
-        let expected_topics = (symbol_short!("blood"), symbol_short!("request")).into_val(&env);
+        // 2. Verify the Topics (blood, request, v1)
+        let expected_topics = (
+            symbol_short!("blood"),
+            symbol_short!("request"),
+            symbol_short!("v1"),
+        )
+            .into_val(&env);
         assert_eq!(last_event.1, expected_topics);
 
         // 3. Verify the Data (Optional: Deserialize it to be sure)
@@ -4513,6 +4610,35 @@ mod test {
         let event_data: RequestCreatedEvent = last_event.2.into_val(&env);
         assert_eq!(event_data.request_id, req_id);
         assert_eq!(event_data.hospital_id, hospital);
+    }
+
+    #[test]
+    fn test_event_schema_version_topic_distinguishes_current_from_legacy() {
+        let env = Env::default();
+        let (_, _, hospital, client) = setup_contract_with_hospital(&env);
+
+        env.mock_all_auths();
+        client.create_request(
+            &hospital,
+            &BloodType::BPositive,
+            &300,
+            &UrgencyLevel::Critical,
+            &(env.ledger().timestamp() + 3600),
+            &String::from_str(&env, "ER_Room"),
+        );
+
+        let (_, topics, _) = env.events().all().last().unwrap();
+        let legacy_topics = (symbol_short!("blood"), symbol_short!("request")).into_val(&env);
+        let current_topics = (
+            symbol_short!("blood"),
+            symbol_short!("request"),
+            symbol_short!("v1"),
+        )
+            .into_val(&env);
+
+        assert_ne!(topics, legacy_topics);
+        assert_eq!(topics, current_topics);
+        assert_eq!(EVENT_SCHEMA_VERSION, 1);
     }
 
     #[test]
@@ -5105,7 +5231,7 @@ mod test {
 
         let unit_ids = vec![&env, unit_id_1, unit_id_2];
         env.mock_all_auths();
-        client.approve_request(&bank, &request_id, &unit_ids);
+        client.update_request_status(&request_id, &RequestStatus::Approved);
 
         env.as_contract(&contract_id, || {
             let mut units: Map<u64, BloodUnit> = env
@@ -6258,7 +6384,7 @@ mod test {
         let events = env.events().all();
         assert!(!events.is_empty());
         let (_, topics, _) = events.last().unwrap();
-        assert_eq!(topics.len(), 2);
+        assert_eq!(topics.len(), 3);
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap(),
             symbol_short!("org")
@@ -6266,6 +6392,10 @@ mod test {
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
             symbol_short!("reg")
+        );
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics.get(2).unwrap()).unwrap(),
+            symbol_short!("v1")
         );
 
         // Verify organization
@@ -6275,7 +6405,7 @@ mod test {
         let events = env.events().all();
         assert!(!events.is_empty());
         let (_, topics, _) = events.last().unwrap();
-        assert_eq!(topics.len(), 2);
+        assert_eq!(topics.len(), 3);
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap(),
             symbol_short!("org")
@@ -6283,6 +6413,10 @@ mod test {
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
             symbol_short!("verified")
+        );
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics.get(2).unwrap()).unwrap(),
+            symbol_short!("v1")
         );
 
         // Unverify organization
@@ -6293,7 +6427,7 @@ mod test {
         let events = env.events().all();
         assert!(!events.is_empty());
         let (_, topics, _) = events.last().unwrap();
-        assert_eq!(topics.len(), 2);
+        assert_eq!(topics.len(), 3);
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap(),
             symbol_short!("org")
@@ -6301,6 +6435,10 @@ mod test {
         assert_eq!(
             Symbol::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
             symbol_short!("unverif")
+        );
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics.get(2).unwrap()).unwrap(),
+            symbol_short!("v1")
         );
     }
 
