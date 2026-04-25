@@ -156,6 +156,7 @@ pub enum Error {
     PenaltyNotFound = 404,
     AlreadyInitialized = 405,
     NotInitialized = 406,
+    ContractPaused = 407,
 }
 
 /// Storage key for persisted reputation scores.
@@ -169,6 +170,7 @@ pub enum DataKey {
     DecayConfig,
     MinimumInteractions,
     BadgeConfig,
+    Paused,
 }
 
 // ── Contract ───────────────────────────────────────────────────────────────────
@@ -217,6 +219,56 @@ impl ReputationContract {
         env.events()
             .publish((symbol_short!("init"), symbol_short!("v1")), admin);
 
+        Ok(())
+    }
+
+    /// Pause all state-mutating functions. Admin only.
+    pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotAuthorized)?;
+        if admin != stored {
+            return Err(Error::NotAuthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &true);
+        Ok(())
+    }
+
+    /// Unpause the contract. Admin only.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotAuthorized)?;
+        if admin != stored {
+            return Err(Error::NotAuthorized);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
+    }
+
+    /// Returns whether the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
+            return Err(Error::ContractPaused);
+        }
         Ok(())
     }
 
@@ -275,6 +327,7 @@ impl ReputationContract {
         score: i64,
         timestamp: u64,
     ) -> Result<ReputationScore, Error> {
+        Self::require_not_paused(&env)?;
         if score < 1 || score > 5 {
             return Err(Error::InvalidRating);
         }
@@ -326,6 +379,7 @@ impl ReputationContract {
         response_secs: u64,
         timestamp: u64,
     ) -> Result<ReputationScore, Error> {
+        Self::require_not_paused(&env)?;
         let mut input: ReputationInput = env
             .storage()
             .persistent()
@@ -358,6 +412,7 @@ impl ReputationContract {
 
     /// Flag an entity for fraud and recalculate score.
     pub fn flag_fraud(env: Env, entity_id: u64, timestamp: u64) -> Result<ReputationScore, Error> {
+        Self::require_not_paused(&env)?;
         let mut input: ReputationInput = env
             .storage()
             .persistent()
@@ -385,6 +440,7 @@ impl ReputationContract {
             .get(&DataKey::Admin)
             .ok_or(Error::NotAuthorized)?;
         admin.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut input: ReputationInput = env
             .storage()
@@ -410,6 +466,7 @@ impl ReputationContract {
 
     /// File an appeal for a specific penalty.
     pub fn appeal_penalty(env: Env, entity_id: u64, penalty_id: u32) -> Result<(), Error> {
+        Self::require_not_paused(&env)?;
         let mut input: ReputationInput = env
             .storage()
             .persistent()

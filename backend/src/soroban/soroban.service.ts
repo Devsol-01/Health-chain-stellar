@@ -24,6 +24,10 @@ import {
   assertTransferCustodyIds,
   assertLogTemperatureIds,
 } from '../common/guards/on-chain-id.guard';
+import {
+  LIFEBANK_INVENTORY_METHODS,
+  mapBloodTypeToLifebankIndex,
+} from '../blockchain/contracts/lifebank-contracts';
 
 import { BlockchainEvent } from './entities/blockchain-event.entity';
 import { CONTRACT_EVENT_SCHEMA_VERSION } from './event-schema-version';
@@ -211,7 +215,7 @@ export class SorobanService implements OnModuleInit {
       })
         .addOperation(
           this.contract.call(
-            'register_blood',
+            LIFEBANK_INVENTORY_METHODS.registerBlood,
             this.createAddressScVal(params.bankId),
             bloodTypeEnum,
             xdr.ScVal.scvU32(params.quantityMl),
@@ -678,23 +682,7 @@ export class SorobanService implements OnModuleInit {
    * Map blood type string to Soroban enum
    */
   private mapBloodType(bloodType: string): xdr.ScVal {
-    const typeMap: Record<string, number> = {
-      'A+': 0,
-      'A-': 1,
-      'B+': 2,
-      'B-': 3,
-      'AB+': 4,
-      'AB-': 5,
-      'O+': 6,
-      'O-': 7,
-    };
-
-    const enumValue = typeMap[bloodType];
-    if (enumValue === undefined) {
-      throw new Error(`Invalid blood type: ${bloodType}`);
-    }
-
-    return xdr.ScVal.scvU32(enumValue);
+    return xdr.ScVal.scvU32(mapBloodTypeToLifebankIndex(bloodType));
   }
 
   private mapQuarantineReason(

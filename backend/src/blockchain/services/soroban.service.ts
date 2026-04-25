@@ -1,7 +1,8 @@
-import { InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 
 import { assertSorobanTxJob } from '../../common/guards/on-chain-id.guard';
+import { normalizeContractMethod } from '../contracts/lifebank-contracts';
 import { JobDeduplicationPlugin } from '../plugins/job-deduplication.plugin';
 import {
   SorobanTxJob,
@@ -11,8 +12,9 @@ import {
 
 import { ConfirmationService } from './confirmation.service';
 import { IdempotencyService } from './idempotency.service';
+import { QueueMetricsService } from './queue-metrics.service';
 
-import type { Queue } from 'bull';
+import type { Queue } from 'bullmq';
 
 @Injectable()
 export class SorobanService {
@@ -27,6 +29,7 @@ export class SorobanService {
     private idempotencyService: IdempotencyService,
     private deduplicationPlugin: JobDeduplicationPlugin,
     private confirmationService: ConfirmationService,
+    private queueMetricsService: QueueMetricsService,
   ) {}
 
   /**
@@ -38,38 +41,39 @@ export class SorobanService {
    * @throws Error if idempotency key already exists (duplicate submission)
    */
   async submitTransaction(job: SorobanTxJob): Promise<string> {
-    assertSorobanTxJob(job);
+    const normalizedJob = this.normalizeJob(job);
+    assertSorobanTxJob(normalizedJob);
 
     // Enforce idempotency: prevent duplicate submissions
     const isNew = await this.idempotencyService.checkAndSetIdempotencyKey(
-      job.idempotencyKey,
+      normalizedJob.idempotencyKey,
     );
 
     if (!isNew) {
       this.logger.warn(
-        `Duplicate submission detected for idempotency key: ${job.idempotencyKey}`,
+        `Duplicate submission detected for idempotency key: ${normalizedJob.idempotencyKey}`,
       );
       throw new Error('Duplicate submission - idempotency key already exists');
     }
 
     // Check for duplicate job within dedup window
     const isDedupNew = await this.deduplicationPlugin.checkAndSetJobDedup(
-      job.contractMethod,
-      job.args,
+      normalizedJob.contractMethod,
+      normalizedJob.args,
     );
 
     if (!isDedupNew) {
       this.logger.warn(
-        `Duplicate job suppressed (within dedup window): ${job.contractMethod}`,
-        { idempotencyKey: job.idempotencyKey },
+        `Duplicate job suppressed (within dedup window): ${normalizedJob.contractMethod}`,
+        { idempotencyKey: normalizedJob.idempotencyKey },
       );
       throw new Error('Duplicate job - equivalent job enqueued recently');
     }
 
-    const maxRetries = job.maxRetries ?? this.DEFAULT_MAX_RETRIES;
+    const maxRetries = normalizedJob.maxRetries ?? this.DEFAULT_MAX_RETRIES;
 
     // Add job to queue with exponential backoff and jitter
-    const queueJob = await this.txQueue.add(job, {
+    const queueJob = await this.txQueue.add(job.contractMethod, job, {
       attempts: maxRetries,
       backoff: {
         type: 'exponential',
@@ -77,11 +81,11 @@ export class SorobanService {
       },
       removeOnComplete: true,
       removeOnFail: false, // Keep failed jobs for audit trail
-      jobId: job.idempotencyKey,
+      jobId: normalizedJob.idempotencyKey,
     });
 
     this.logger.log(
-      `Transaction queued: ${queueJob.id} (${job.contractMethod}) with ${maxRetries} max retries`,
+      `Transaction queued: ${queueJob.id} (${normalizedJob.contractMethod}) with ${maxRetries} max retries`,
     );
     return String(queueJob.id);
   }
@@ -94,7 +98,9 @@ export class SorobanService {
   ): Promise<{ verified: boolean; verifiedAt?: number } | null> {
     // This would call the Soroban contract's get_organization method
     // For now, returning a stub that should be implemented with actual contract call
-    this.logger.debug(`Querying verification status for org: ${organizationId}`);
+    this.logger.debug(
+      `Querying verification status for org: ${organizationId}`,
+    );
     // TODO: Implement actual Soroban contract query
     return null;
   }
@@ -133,6 +139,23 @@ export class SorobanService {
       throw new Error('Soroban job completed without a transaction hash');
     }
     return { transactionHash: result.transactionHash };
+  }
+
+  private normalizeJob(job: SorobanTxJob): SorobanTxJob {
+    const normalizedMethod = normalizeContractMethod(job.contractMethod);
+
+    if (normalizedMethod === job.contractMethod) {
+      return job;
+    }
+
+    return {
+      ...job,
+      contractMethod: normalizedMethod,
+      metadata: {
+        ...(job.metadata || {}),
+        normalizedFromContractMethod: job.contractMethod,
+      },
+    };
   }
 
   /**
@@ -281,7 +304,11 @@ export class SorobanService {
     );
 
     // Fetch failed jobs from DLQ
-    const failedJobs = await this.dlq.getJobs(['failed'], offset, offset + batchSize - 1);
+    const failedJobs = await this.dlq.getJobs(
+      ['failed'],
+      offset,
+      offset + batchSize - 1,
+    );
 
     const result = {
       dryRun,
