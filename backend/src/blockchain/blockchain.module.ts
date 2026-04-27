@@ -1,5 +1,7 @@
 import { BullModule } from '@nestjs/bull';
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { CompensationModule } from '../common/compensation/compensation.module';
 
@@ -13,6 +15,15 @@ import { JobDeduplicationPlugin } from './plugins/job-deduplication.plugin';
 
 @Module({
   imports: [
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET', 'default-secret'),
+        signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1h') },
+      }),
+    }),
     CompensationModule,
     BullModule.registerQueue(
       {

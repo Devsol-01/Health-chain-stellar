@@ -17,6 +17,8 @@ import { Request } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 
 import { AdminGuard } from '../guards/admin.guard';
+import { RequireAdminScope } from '../decorators/require-admin-scope.decorator';
+import { AdminScope } from '../enums/admin-scope.enum';
 import { SorobanService } from '../services/soroban.service';
 import { BlockchainCallbackDto } from '../dto/blockchain-callback.dto';
 
@@ -161,6 +163,7 @@ export class BlockchainController {
    */
   @Get('queue/status')
   @UseGuards(AdminGuard)
+  @RequireAdminScope(AdminScope.READ_METRICS)
   @HttpCode(HttpStatus.OK)
   async getQueueStatus(): Promise<QueueMetrics> {
     return this.sorobanService.getQueueMetrics();
