@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MulterModule } from '@nestjs/platform-express';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -9,6 +10,8 @@ import { BloodUnitTrail } from '../soroban/entities/blood-unit-trail.entity';
 import { SorobanModule } from '../soroban/soroban.module';
 import { DonorEligibilityModule } from '../donor-eligibility/donor-eligibility.module';
 import { PolicyCenterModule } from '../policy-center/policy-center.module';
+import { ApprovalModule } from '../approvals/approval.module';
+import { FileMetadataModule } from '../file-metadata/file-metadata.module';
 
 import { BloodInventoryQueryService } from './blood-inventory-query.service';
 import { BloodStatusService } from './blood-status.service';
@@ -25,10 +28,12 @@ import { DispositionController } from './controllers/disposition.controller';
 import { QuarantineController } from './controllers/quarantine.controller';
 import { DispositionService } from './services/disposition.service';
 import { TransferRecord } from './entities/transfer-record.entity';
+import { BloodUnitBatchService } from './batch/blood-unit-batch.service';
 
 
 @Module({
   imports: [
+    MulterModule.register({ storage: undefined }), // memory storage
     TypeOrmModule.forFeature([
       BloodUnitTrail,
       BloodUnitEntity,
@@ -56,6 +61,7 @@ import { TransferRecord } from './entities/transfer-record.entity';
     QrVerificationService,
     DispositionService,
     QuarantineService,
+    BloodUnitBatchService,
   ],
   exports: [
     BloodUnitsService,
