@@ -94,6 +94,24 @@ export class SecurityEventLoggerService {
       case SecurityEventType.AUTH_STEP_UP_REQUIRED:
       case SecurityEventType.TENANT_ACCESS_DENIED:
         return ActivityType.AUTH_SESSION_RISK_ELEVATED;
+      
+      // WebSocket events map to existing activity types
+      case SecurityEventType.WS_NO_TOKEN:
+      case SecurityEventType.WS_INVALID_TOKEN:
+      case SecurityEventType.WS_INVALID_CLAIMS:
+      case SecurityEventType.WS_AUTH_ERROR:
+        return ActivityType.AUTH_LOGIN_FAILED;
+      
+      case SecurityEventType.WS_AUTH_SUCCESS:
+        return ActivityType.AUTH_LOGIN_SUCCESS;
+      
+      case SecurityEventType.WS_PRIVILEGE_VIOLATION:
+      case SecurityEventType.WS_TENANT_ESCAPE_ATTEMPT:
+      case SecurityEventType.WS_RATE_LIMITED:
+      case SecurityEventType.WS_TOKEN_REFRESH_FAILED:
+      case SecurityEventType.WS_HEARTBEAT_TIMEOUT:
+        return ActivityType.AUTH_SESSION_RISK_ELEVATED;
+      
       default:
         return ActivityType.AUTH_LOGIN_FAILED;
     }
